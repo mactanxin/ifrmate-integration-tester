@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iframe 集成测试 - 父站模拟器</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @theme {
+      --color-panel: #ffffff;
+      --color-page-start: #f7fafc;
+      --color-page-end: #edf2f7;
+      --color-border-soft: #e2e8f0;
+      --color-text-main: #1a202c;
+      --color-text-muted: #718096;
+      --color-brand: #667eea;
+      --color-brand-dark: #5a67d8;
+      --color-success: #48bb78;
+      --color-warning: #ed8936;
+      --color-danger: #f56565;
+      --color-info: #4299e1;
+    }
+  </style>
+  <style>
+    .log-entry {
+      margin-bottom: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-left-width: 4px;
+      border-radius: 0.75rem;
+      padding: 0.875rem 1rem;
+      font-size: 0.8125rem;
+      line-height: 1.65;
+      word-break: break-word;
+      background: rgba(15, 23, 42, 0.72);
+      border-left-color: #64748b;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(6px);
+    }
+
+    .log-entry.received {
+      background: rgba(14, 116, 144, 0.16);
+      border-left-color: #38bdf8;
+    }
+
+    .log-entry.sent {
+      background: rgba(22, 163, 74, 0.16);
+      border-left-color: #4ade80;
+    }
+
+    .log-entry.error {
+      background: rgba(220, 38, 38, 0.16);
+      border-left-color: #f87171;
+    }
+
+    .log-entry.success {
+      background: rgba(21, 128, 61, 0.18);
+      border-left-color: #22c55e;
+    }
+
+    .log-timestamp {
+      display: inline-block;
+      margin-right: 0.625rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    .log-message {
+      color: #e2e8f0;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 0.625rem;
+      height: 0.625rem;
+      margin-right: 0.5rem;
+      border-radius: 9999px;
+      vertical-align: middle;
+    }
+
+    .status-online {
+      background: #48bb78;
+      box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.18);
+    }
+
+    .status-offline {
+      background: #f56565;
+      box-shadow: 0 0 0 3px rgba(245, 101, 101, 0.18);
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-page-start to-page-end text-text-main">
+  <div class="mx-auto flex min-h-screen max-w-[1920px] flex-col p-4 lg:p-6">
+    <header class="mb-4 rounded-2xl border border-border-soft bg-panel px-6 py-5 shadow-sm">
+      <h1 class="text-2xl font-bold tracking-tight lg:text-3xl">iframe 集成测试 - 父站模拟器</h1>
+      <p class="mt-2 text-sm text-text-muted lg:text-base">模拟父级统一登录平台，测试 aiums-web 子站的 iframe 集成功能</p>
+    </header>
+
+    <main class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-5">
+      <aside class="min-h-0 lg:sticky lg:top-6 lg:col-span-1 lg:h-[calc(100vh-8.5rem)]">
+        <div class="flex h-full flex-col overflow-hidden rounded-2xl border border-border-soft bg-panel shadow-sm">
+          <div class="border-b border-border-soft px-5 py-4">
+            <h2 class="text-lg font-semibold">控制面板</h2>
+          </div>
+
+          <div class="flex-1 space-y-4 overflow-y-auto p-4 overscroll-contain">
+            <section class="rounded-xl border border-border-soft bg-slate-50 p-4">
+              <h3 class="mb-3 flex items-center text-sm font-semibold text-slate-700 before:mr-2 before:h-2 before:w-2 before:rounded-full before:bg-brand before:content-['']">
+                基本操作
+              </h3>
+              <div class="space-y-2">
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-dark"
+                  onclick="sendInitialToken()">
+                  <span>🔑</span>
+                  <span>发送初始TOKEN</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-danger px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-95"
+                  onclick="sendLogout()">
+                  <span>🚪</span>
+                  <span>发送LOGOUT消息</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-warning px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-95"
+                  onclick="simulateTokenExpiry()">
+                  <span>⏰</span>
+                  <span>模拟Token过期</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-border-soft bg-slate-50 p-4">
+              <h3 class="mb-3 flex items-center text-sm font-semibold text-slate-700 before:mr-2 before:h-2 before:w-2 before:rounded-full before:bg-brand before:content-['']">
+                测试工具
+              </h3>
+              <div class="space-y-2">
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="checkLocalStorage()">
+                  <span>📊</span>
+                  <span>检查本地存储</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="clearAuthStorage()">
+                  <span>🧹</span>
+                  <span>清空认证存储</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="simulateAuthFailure()">
+                  <span>⚠️</span>
+                  <span>模拟401错误</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="validateMessageFormat()">
+                  <span>✅</span>
+                  <span>验证消息格式</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="showRealToken()">
+                  <span>🔍</span>
+                  <span>显示真实TOKEN</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-border-soft bg-slate-50 p-4">
+              <h3 class="mb-3 flex items-center text-sm font-semibold text-slate-700 before:mr-2 before:h-2 before:w-2 before:rounded-full before:bg-brand before:content-['']">
+                测试场景
+              </h3>
+              <div class="space-y-2">
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-95"
+                  onclick="runFullTest()">
+                  <span>🚀</span>
+                  <span>运行完整流程测试</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="runFieldFilterTest()">
+                  <span>🔍</span>
+                  <span>用户字段过滤测试</span>
+                </button>
+                <button
+                  class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                  onclick="runRefreshTest()">
+                  <span>🔄</span>
+                  <span>Token刷新测试</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-border-soft bg-slate-50 p-4">
+              <h3 class="mb-3 flex items-center text-sm font-semibold text-slate-700 before:mr-2 before:h-2 before:w-2 before:rounded-full before:bg-brand before:content-['']">
+                系统状态
+              </h3>
+              <div class="grid grid-cols-1 gap-3">
+                <div class="rounded-lg border border-border-soft bg-white p-3">
+                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">子站状态</h4>
+                  <p id="childStatus" class="text-sm font-medium text-slate-700">
+                    <span class="status-indicator status-offline"></span>
+                    等待连接...
+                  </p>
+                </div>
+                <div class="rounded-lg border border-border-soft bg-white p-3">
+                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">消息计数</h4>
+                  <p id="messageCount" class="text-sm font-medium text-slate-700">0 条</p>
+                </div>
+                <div class="rounded-lg border border-border-soft bg-white p-3">
+                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">Token状态</h4>
+                  <p id="tokenStatus" class="text-sm font-medium text-slate-700">未设置</p>
+                </div>
+                <div class="rounded-lg border border-border-soft bg-white p-3">
+                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">真实TOKEN</h4>
+                  <p id="realTokenDisplay" class="cursor-pointer break-all text-sm font-medium text-slate-700" title="点击复制">未获取</p>
+                </div>
+                <div class="rounded-lg border border-border-soft bg-white p-3">
+                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">最后活动</h4>
+                  <p id="lastActivity" class="text-sm font-medium text-slate-700">--:--:--</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </aside>
+
+      <section class="min-h-0 lg:col-span-3">
+        <div class="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-border-soft bg-panel shadow-sm">
+          <div class="border-b border-border-soft px-5 py-4">
+            <h2 class="text-lg font-semibold">子站预览</h2>
+            <div class="mt-2 flex flex-col gap-2 text-sm text-text-muted md:flex-row md:items-center md:justify-between">
+              <p class="min-w-0 break-all">
+                子站URL:
+                <span id="childUrl" class="font-medium text-slate-700">http://localhost:3001</span>
+              </p>
+              <button
+                class="inline-flex w-fit items-center justify-center rounded-lg border border-border-soft bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                onclick="reloadIframe()">
+                刷新
+              </button>
+            </div>
+          </div>
+
+          <div class="min-h-0 flex-1 bg-slate-100 p-4">
+            <iframe
+              id="childFrame"
+              src="http://localhost:3001"
+              title="aiums-web 子站"
+              class="h-full min-h-[420px] w-full rounded-xl border border-border-soft bg-white shadow-inner"></iframe>
+          </div>
+        </div>
+      </section>
+
+      <aside class="min-h-0 lg:col-span-1">
+        <div class="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-[0_20px_45px_rgba(15,23,42,0.35)]">
+          <div class="border-b border-slate-800 bg-slate-950 px-5 py-4">
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <span class="h-3 w-3 rounded-full bg-rose-500"></span>
+                <span class="h-3 w-3 rounded-full bg-amber-400"></span>
+                <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
+              </div>
+              <span class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium tracking-wide text-emerald-300">
+                CHANNEL ACTIVE
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 class="text-lg font-semibold text-slate-100">通信日志</h3>
+                <p class="mt-1 text-xs text-slate-400">实时显示父站与 iframe 子站之间的消息通信记录</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-800"
+                  onclick="clearLogs()">
+                  清空日志
+                </button>
+                <button
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-slate-800"
+                  onclick="exportLogs()">
+                  导出日志
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="border-b border-slate-800 bg-slate-900/80 px-5 py-3">
+            <div class="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+              <span>Terminal Output</span>
+              <span id="logStatusText" class="font-medium text-emerald-300">Streaming</span>
+            </div>
+          </div>
+
+          <div
+            id="logOutput"
+            class="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.08),_transparent_32%),linear-gradient(180deg,_#020617_0%,_#0f172a_100%)] p-4 font-mono text-sm text-slate-100 overscroll-contain"></div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="parent-simulator.js"></script>
+    <script>
+      // DOM 元素
+      const logOutput = document.getElementById('logOutput')
+      const childStatus = document.getElementById('childStatus')
+      const messageCount = document.getElementById('messageCount')
+      const tokenStatus = document.getElementById('tokenStatus')
+      const lastActivity = document.getElementById('lastActivity')
+      const childUrl = document.getElementById('childUrl')
+
+      // 状态变量
+      let messageCounter = 0
+      let testInProgress = false
+
+      // 初始化
+      document.addEventListener('DOMContentLoaded', function () {
+        log('系统初始化完成')
+        updateStatus()
+
+        // 监听子站消息
+        parentSimulator.on('READY', message => {
+          updateChildStatus('online', '已连接')
+          log('子站已就绪，等待TOKEN...', 'received')
+        })
+
+        parentSimulator.on('REFRESH_TOKEN', message => {
+          log('收到刷新TOKEN请求', 'received')
+        })
+
+        // 定期更新状态
+        setInterval(updateStatus, 2000)
+      })
+
+      // 日志功能
+      function log(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString()
+        const entry = document.createElement('div')
+        entry.className = `log-entry ${type}`
+        entry.innerHTML = `
+        <span class="log-timestamp">[${timestamp}]</span>
+        <span class="log-message">${message}</span>
+      `
+        logOutput.appendChild(entry)
+        logOutput.scrollTop = logOutput.scrollHeight
+
+        messageCounter++
+        messageCount.textContent = `${messageCounter} 条`
+        lastActivity.textContent = timestamp
+
+        // 同时输出到控制台
+        console.log(`[${timestamp}] ${message}`)
+      }
+
+      function clearLogs() {
+        logOutput.innerHTML = ''
+        messageCounter = 0
+        messageCount.textContent = '0 条'
+        log('日志已清空')
+      }
+
+      function exportLogs() {
+        const logs = []
+        const entries = logOutput.querySelectorAll('.log-entry')
+        entries.forEach(entry => {
+          logs.push(entry.textContent)
+        })
+
+        const blob = new Blob([logs.join('\n')], {type: 'text/plain'})
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `iframe-test-logs-${new Date().toISOString().slice(0, 10)}.txt`
+        a.click()
+
+        log('日志已导出')
+      }
+
+      // 状态更新
+      function updateStatus() {
+        // 更新token状态
+        const token = localStorage.getItem('aiumsToken')
+        const expireAt = localStorage.getItem('aiumsTokenExpireAt')
+
+        if (token) {
+          if (expireAt) {
+            const expireTime = new Date(parseInt(expireAt))
+            const now = new Date()
+            const diff = expireTime - now
+            const minutes = Math.floor(diff / 60000)
+
+            if (diff > 0) {
+              tokenStatus.innerHTML = `有效 (${minutes}分钟后过期)`
+              tokenStatus.style.color = '#48bb78'
+            } else {
+              tokenStatus.innerHTML = '已过期'
+              tokenStatus.style.color = '#f56565'
+            }
+          } else {
+            tokenStatus.innerHTML = '有效 (无过期时间)'
+            tokenStatus.style.color = '#48bb78'
+          }
+        } else {
+          tokenStatus.innerHTML = '未设置'
+          tokenStatus.style.color = '#718096'
+        }
+      }
+
+      function updateChildStatus(status, text) {
+        const indicator = childStatus.querySelector('.status-indicator')
+        indicator.className = `status-indicator status-${status}`
+        childStatus.innerHTML = `${indicator.outerHTML} ${text}`
+      }
+
+      // 控制函数
+      function sendInitialToken() {
+        log('发送初始TOKEN...')
+        parentSimulator.sendToken()
+      }
+
+      function sendLogout() {
+        log('发送LOGOUT消息...')
+        parentSimulator.sendLogout()
+      }
+
+      function simulateTokenExpiry() {
+        log('模拟token过期...')
+        parentSimulator.simulateTokenExpiry()
+      }
+
+      function checkLocalStorage() {
+        log('检查本地存储...')
+        const result = TestUtils.checkLocalStorage()
+
+        log(`Token: ${result.token}`)
+        log(`过期时间: ${result.expireAt}`)
+
+        if (Object.keys(result.userInfo).length > 0) {
+          log(`用户信息字段 (${Object.keys(result.userInfo).length}个):`)
+          Object.entries(result.userInfo).forEach(([key, value]) => {
+            log(`  ${key}: ${value}`)
+          })
+        } else {
+          log('未找到用户信息字段')
+        }
+      }
+
+      function clearAuthStorage() {
+        log('清空认证存储...')
+        const removed = TestUtils.clearAuthStorage()
+        log(`已移除 ${removed} 个存储项`)
+        updateStatus()
+      }
+
+      function simulateAuthFailure() {
+        log('模拟HTTP 401错误...')
+        TestUtils.simulateAuthFailure()
+      }
+
+      function validateMessageFormat() {
+        log('验证消息格式...')
+
+        // 获取最近的消息
+        const history = parentSimulator.getMessageHistory()
+        if (history.length === 0) {
+          log('暂无消息历史', 'error')
+          return
+        }
+
+        const recentMessage = history[history.length - 1].message
+        const validation = ParentStationSimulator.validateMessageFormat(recentMessage)
+
+        if (validation.isValid) {
+          log(`消息格式验证通过: ${recentMessage.type}`, 'received')
+        } else {
+          log(`消息格式验证失败: ${validation.errors.join(', ')}`, 'error')
+        }
+      }
+
+      function reloadIframe() {
+        log('重新加载子站...')
+        const iframe = document.getElementById('childFrame')
+        iframe.src = iframe.src
+        updateChildStatus('offline', '重新连接中...')
+      }
+
+      // 测试场景
+      async function runFullTest() {
+        if (testInProgress) {
+          log('已有测试在进行中', 'error')
+          return
+        }
+
+        testInProgress = true
+        log('开始完整流程测试...', 'success')
+
+        try {
+          // 1. 等待子站READY
+          log('步骤1: 等待子站发送READY信号...')
+          await delay(1000)
+
+          // 2. 发送TOKEN
+          log('步骤2: 发送初始TOKEN...')
+          parentSimulator.sendToken()
+          await delay(1000)
+
+          // 3. 检查存储
+          log('步骤3: 检查token是否存储...')
+          checkLocalStorage()
+          await delay(500)
+
+          // 4. 模拟接口调用
+          log('步骤4: 模拟接口调用（通过HTTP拦截器）...')
+          // 可以在这里添加实际的API调用测试
+          await delay(1000)
+
+          // 5. 测试token刷新
+          log('步骤5: 测试token刷新机制...')
+          parentSimulator.simulateTokenExpiry()
+          await delay(2000)
+
+          // 6. 测试LOGOUT
+          log('步骤6: 测试LOGOUT处理...')
+          parentSimulator.sendLogout()
+          await delay(1000)
+
+          // 7. 最终检查
+          log('步骤7: 最终状态检查...')
+          checkLocalStorage()
+
+          log('完整流程测试完成！', 'success')
+        } catch (error) {
+          log(`测试出错: ${error.message}`, 'error')
+        } finally {
+          testInProgress = false
+        }
+      }
+
+      async function runFieldFilterTest() {
+        log('开始用户字段过滤测试...', 'success')
+
+        // 首先清空存储
+        TestUtils.clearAuthStorage()
+        await delay(500)
+
+        // 发送包含多个字段的TOKEN
+        log('发送包含多个字段的TOKEN...')
+        const message = MessageGenerator.createTokenMessage('test-filter-token', Date.now() + 3600000, {
+          userId: 'filter-test-001',
+          username: '过滤测试用户',
+          email: 'filter@test.com',
+          phone: '13800138000',
+          department: '测试部',
+          role: 'tester',
+          extra1: '额外字段1',
+          extra2: '额外字段2',
+          custom: '自定义字段',
+        })
+
+        parentSimulator.sendToChild(message)
+        await delay(1000)
+
+        // 检查存储
+        log('检查过滤后的存储...')
+        const result = TestUtils.checkLocalStorage()
+
+        // 根据iframeAuth配置，只有特定字段会被存储
+        // 这里只是演示，实际过滤逻辑在iframeAuth.ts中配置
+        log(`存储的字段数量: ${Object.keys(result.userInfo).length}`)
+
+        log('用户字段过滤测试完成', 'success')
+      }
+
+      async function runRefreshTest() {
+        log('开始Token刷新测试...', 'success')
+
+        // 设置较短的刷新阈值以便测试
+        log('设置较短的刷新阈值...')
+        // 注意：实际阈值在iframeAuth.ts中配置，这里只是演示
+
+        // 发送即将过期的token
+        log('发送即将过期的token...')
+        const expireAt = Date.now() + 10000 // 10秒后过期
+        const message = MessageGenerator.createTokenMessage('test-refresh-token', expireAt, {userId: 'refresh-test'})
+
+        parentSimulator.sendToChild(message)
+        await delay(2000)
+
+        // 检查是否触发了刷新
+        log('等待刷新机制触发...')
+        await delay(8000) // 等待token过期前触发刷新
+
+        log('Token刷新测试完成', 'success')
+      }
+
+      // 工具函数
+      function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms))
+      }
+
+      // 设置子站URL（从URL参数读取）
+      function setupChildUrl() {
+        const params = new URLSearchParams(window.location.search)
+        const urlParam = params.get('childUrl')
+
+        if (urlParam) {
+          childUrl.textContent = urlParam
+          document.getElementById('childFrame').src = urlParam
+        }
+      }
+
+      // 初始化URL
+      setupChildUrl()
+    </script>
+</body>
+
+</html>

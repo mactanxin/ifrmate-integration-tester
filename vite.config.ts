@@ -11,4 +11,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/dev': {
+        target: 'https://192.168.21.220:443',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/dev/, ''),
+      },
+    },
+  },
 })
