@@ -29,8 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 const defaultUrl = "http://localhost:3001";
 const defaultBackendBase = "https://192.168.21.220:443/";
 const defaultLoginPath = "/dev/aiums/auth/login/";
-const defaultSandbox =
-  "allow-scripts allow-same-origin allow-forms allow-popups";
+const defaultSandbox = "";
 const defaultAllow = "clipboard-write; fullscreen";
 const defaultMessage = `{
   "type": "PING",
@@ -65,17 +64,14 @@ type LogItem = {
   timestamp: string;
 };
 
-type LoginPayload = {
-  code?: number;
-  msg?: string;
-  data?: {
-    token?: string;
-    userInfo?: Record<string, unknown>;
-    userId?: string;
-    roleType?: string;
-    permList?: string;
-    userMode?: string;
+type TokenMessage = {
+  type: "TOKEN";
+  payload: {
+    token: string;
+    expireIn: number;
   };
+  timestamp: number;
+  id: string;
 };
 
 type LoginResponse = {
@@ -102,6 +98,18 @@ function makeLog(
     title,
     detail,
     timestamp: new Date().toLocaleTimeString(),
+  };
+}
+
+function createTokenMessage(token: string): TokenMessage {
+  return {
+    type: "TOKEN",
+    payload: {
+      token,
+      expireIn: 3600,
+    },
+    timestamp: Date.now(),
+    id: `msg_${Date.now()}`,
   };
 }
 
@@ -141,27 +149,6 @@ function asPrettyJson(value: unknown) {
   } catch {
     return String(value);
   }
-}
-
-function resolveLoginPayload(response: LoginResponse): LoginPayload {
-  const nested = response.data as LoginPayload | undefined;
-
-  if (
-    nested &&
-    (typeof nested.code !== "undefined" ||
-      typeof nested.msg !== "undefined" ||
-      (nested.data &&
-        typeof nested.data === "object" &&
-        "token" in nested.data))
-  ) {
-    return nested;
-  }
-
-  return {
-    code: response.code,
-    msg: response.msg,
-    data: response.data,
-  };
 }
 
 async function sha256Enc(value: string) {
@@ -204,11 +191,11 @@ export function IframeLabPage() {
 
   const previewUrl = normalizeUrl(url);
   const targetOrigin = previewUrl ? getOrigin(previewUrl) : "*";
+  const effectiveSandbox = sandbox.trim();
   const embedCode = `<iframe
   title="${title}"
   src="${previewUrl || defaultUrl}"
-  sandbox="${sandbox}"
-  allow="${allow}"
+${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
   loading="eager"
   referrerpolicy="strict-origin-when-cross-origin"
   style="width: ${viewportWidth}; height: ${height}px; border: 0; border-radius: 24px;"
@@ -302,9 +289,19 @@ export function IframeLabPage() {
       }
 
       const res = (await response.json()) as LoginResponse;
-      console.log("awaited real res: ", res);
+      const loginResult = res.data;
 
-      const nextRawToken = res.data.token;
+      if (res.code !== 200 && res.code !== 201) {
+        throw new Error(
+          res.msg || `登录返回异常 code=${String(res.code)}\n${JSON.stringify(res, null, 2)}`,
+        );
+      }
+
+      if (!loginResult?.token) {
+        throw new Error(`登录成功，但响应中未返回 token\n${JSON.stringify(res, null, 2)}`);
+      }
+
+      const nextRawToken = loginResult.token;
       const aiumsToken =
         "Basic" + btoa(encodeURI(`${nextRawToken}:${Date.now()}`));
 
@@ -314,20 +311,7 @@ export function IframeLabPage() {
       setLoginStatus("已获取");
       setLastSuccessAt(new Date().toLocaleString());
 
-      const nextMessage = {
-        type: "TOKEN",
-        payload: {
-          token: aiumsToken,
-          expireAt: Date.now() + 3600000,
-          userInfo: loginResult.userInfo || {
-            userId: loginResult.userId || username,
-            roleType: loginResult.roleType || "",
-            permList: loginResult.permList || "[]",
-            userMode: loginResult.userMode || "",
-            username,
-          },
-        },
-      };
+      const nextMessage = createTokenMessage(aiumsToken);
 
       setMessageDraft(JSON.stringify(nextMessage, null, 2));
       pushLog(
@@ -359,13 +343,7 @@ export function IframeLabPage() {
       return;
     }
 
-    const payload = {
-      type: "TOKEN",
-      payload: {
-        token: realToken,
-        expireAt: Date.now() + 3600000,
-      },
-    };
+    const payload = createTokenMessage(realToken);
 
     setMessageDraft(JSON.stringify(payload, null, 2));
     const target = iframeRef.current?.contentWindow;
@@ -392,7 +370,50 @@ export function IframeLabPage() {
   }
 
   useEffect(() => {
+    function autoReplyToken(messageType: string) {
+      if (!realToken) {
+        pushLog(
+          makeLog(
+            "system",
+            `${messageType} received without token`,
+            "iframe 已请求 TOKEN，但父页当前还没有可用 token。",
+          ),
+        );
+        return;
+      }
+
+      const target = iframeRef.current?.contentWindow;
+
+      if (!target) {
+        pushLog(
+          makeLog(
+            "system",
+            "Iframe unavailable",
+            "iframe 尚未加载完成，无法自动回发 TOKEN。",
+          ),
+        );
+        return;
+      }
+
+      const payload = createTokenMessage(realToken);
+
+      target.postMessage(payload, targetOrigin === "null" ? "*" : targetOrigin);
+      setMessageDraft(JSON.stringify(payload, null, 2));
+      pushLog(
+        makeLog(
+          "message",
+          `Auto replied TOKEN for ${messageType}`,
+          `发送到 ${targetOrigin}\n${JSON.stringify(payload, null, 2)}`,
+        ),
+      );
+    }
+
     function onMessage(event: MessageEvent) {
+      const messageType =
+        typeof event.data === "object" && event.data && "type" in event.data
+          ? String((event.data as { type?: unknown }).type ?? "")
+          : "";
+
       pushLog(
         makeLog(
           "message",
@@ -400,6 +421,10 @@ export function IframeLabPage() {
           asPrettyJson(event.data),
         ),
       );
+
+      if (messageType === "READY" || messageType === "REFRESH_TOKEN") {
+        autoReplyToken(messageType);
+      }
     }
 
     window.addEventListener("message", onMessage);
@@ -407,7 +432,7 @@ export function IframeLabPage() {
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, []);
+  }, [realToken, targetOrigin]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -667,7 +692,9 @@ export function IframeLabPage() {
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Badge variant="secondary">sandbox</Badge>
-              <span className="rounded-full bg-muted px-2 py-1">{sandbox}</span>
+              <span className="rounded-full bg-muted px-2 py-1">
+                {effectiveSandbox || "no sandbox"}
+              </span>
               {rawToken ? <Badge variant="outline">token ready</Badge> : null}
             </div>
 
@@ -692,7 +719,7 @@ export function IframeLabPage() {
                   ref={iframeRef}
                   title={title}
                   src={previewUrl || defaultUrl}
-                  sandbox={sandbox}
+                  sandbox={effectiveSandbox || undefined}
                   allow={allow}
                   className="block w-full bg-background"
                   style={{ height: `${height}px` }}
