@@ -31,6 +31,8 @@ const defaultBackendBase = "https://192.168.21.220:443/";
 const defaultLoginPath = "/dev/aiums/auth/login/";
 const defaultSandbox = "";
 const defaultAllow = "clipboard-write; fullscreen";
+const defaultUsername = import.meta.env.VITE_IFRAME_TEST_USERNAME ?? "";
+const defaultPassword = import.meta.env.VITE_IFRAME_TEST_PASSWORD ?? "";
 const defaultMessage = `{
   "type": "PING",
   "source": "iframe-integration-lab",
@@ -74,6 +76,13 @@ type TokenMessage = {
   id: string;
 };
 
+type LogoutMessage = {
+  type: "LOGOUT";
+  payload: {
+    timestamp: number;
+  };
+};
+
 type LoginResponse = {
   code?: number;
   msg?: string;
@@ -110,6 +119,15 @@ function createTokenMessage(token: string): TokenMessage {
     },
     timestamp: Date.now(),
     id: `msg_${Date.now()}`,
+  };
+}
+
+function createLogoutMessage(): LogoutMessage {
+  return {
+    type: "LOGOUT",
+    payload: {
+      timestamp: Date.now(),
+    },
   };
 }
 
@@ -166,8 +184,8 @@ export function IframeLabPage() {
   const [url, setUrl] = useState(defaultUrl);
   const [backendBase] = useState(defaultBackendBase);
   const [loginPath] = useState(defaultLoginPath);
-  const [username, setUsername] = useState("admin@ailink.com");
-  const [password, setPassword] = useState("Ailink123456");
+  const [username, setUsername] = useState(defaultUsername);
+  const [password, setPassword] = useState(defaultPassword);
   const [title, setTitle] = useState("Embedded integration target");
   const [sandbox, setSandbox] = useState(defaultSandbox);
   const [allow, setAllow] = useState(defaultAllow);
@@ -364,6 +382,39 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
       makeLog(
         "message",
         "TOKEN dispatched",
+        `发送到 ${targetOrigin}\n${JSON.stringify(payload, null, 2)}`,
+      ),
+    );
+  }
+
+  function handleForceLogout() {
+    const payload = createLogoutMessage();
+
+    localStorage.removeItem("aiumsToken");
+    setRawToken("");
+    setRealToken("");
+    setLoginStatus("已清除");
+    setLastSuccessAt("");
+    setMessageDraft(JSON.stringify(payload, null, 2));
+
+    const target = iframeRef.current?.contentWindow;
+
+    if (!target) {
+      pushLog(
+        makeLog(
+          "system",
+          "Iframe unavailable",
+          "本地 token 已清除，但 iframe 尚未加载完成，未发送 LOGOUT。",
+        ),
+      );
+      return;
+    }
+
+    target.postMessage(payload, targetOrigin === "null" ? "*" : targetOrigin);
+    pushLog(
+      makeLog(
+        "message",
+        "LOGOUT dispatched",
         `发送到 ${targetOrigin}\n${JSON.stringify(payload, null, 2)}`,
       ),
     );
@@ -640,6 +691,10 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
           <Button variant="outline" onClick={handleSendTokenToIframe}>
             <Send data-icon="inline-start" />
             Send TOKEN
+          </Button>
+          <Button variant="outline" onClick={handleForceLogout}>
+            <RefreshCw data-icon="inline-start" />
+            Force logout
           </Button>
           <Button onClick={handleReload}>
             <RefreshCw data-icon="inline-start" />
