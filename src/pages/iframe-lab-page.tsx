@@ -519,7 +519,7 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-border/80 bg-muted/35 p-4">
+          <section className="rounded-2xl border border-border/80 bg-muted/35 p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <KeyRound className="size-4 text-muted-foreground" />
               Real Token
@@ -684,6 +684,7 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
           </section>
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2">
+          <h1 className="text-lg font-bold tracking-tight w-full">Actions</h1>
           <Button onClick={handleFetchRealToken} disabled={isFetchingToken}>
             <KeyRound data-icon="inline-start" />
             {isFetchingToken ? "Fetching token..." : "Fetch real token"}
