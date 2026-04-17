@@ -486,7 +486,7 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
   }, [realToken, targetOrigin]);
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+    <div className="grid w-full min-w-0 gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
       <Card className="border-border/70 bg-background/90 shadow-sm backdrop-blur">
         <CardHeader>
           <CardTitle>Control Panel</CardTitle>
@@ -712,7 +712,7 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
         </CardFooter>
       </Card>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex w-full min-w-0 flex-col gap-6">
         <Card className="border-border/70 bg-background/90 shadow-sm backdrop-blur">
           <CardHeader>
             <CardTitle>Latest Real Token</CardTitle>
@@ -754,9 +754,9 @@ ${effectiveSandbox ? `  sandbox="${effectiveSandbox}"\n` : ""}  allow="${allow}"
               {rawToken ? <Badge variant="outline">token ready</Badge> : null}
             </div>
 
-            <div className="overflow-hidden rounded-[28px] border border-border bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(59,130,246,0.10))] p-3">
+            <div className="w-full overflow-hidden rounded-[28px] border border-border bg-[linear-gradient(135deg,rgba(15,23,42,0.03),rgba(59,130,246,0.10))] p-3">
               <div
-                className="mx-auto overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl"
+                className="w-full overflow-hidden rounded-[24px] border border-border bg-background shadow-2xl"
                 style={{ width: viewportWidth }}
               >
                 <div className="flex items-center justify-between border-b border-border bg-muted/60 px-4 py-2 text-xs text-muted-foreground">

@@ -12,7 +12,7 @@ const navigationItems = [
 export function RootLayout() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(73,113,255,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_30%),linear-gradient(180deg,_var(--background),color-mix(in_oklab,var(--background)_82%,white_18%))]">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <div className="flex min-h-screen w-full flex-col px-4 py-6 sm:px-6 lg:px-8">
         <header className="rounded-2xl border border-border/70 bg-background/85 px-5 py-4 shadow-sm backdrop-blur">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
